@@ -21,6 +21,7 @@
 #include "tilecache.hpp"
 
 #include "tilecacheitem.hpp"
+#include "timer.hpp"
 
 #include "SDL.h"
 #include "SDL2pp/Font.hh"
@@ -77,14 +78,14 @@ void osmview::TileCache::prefetch(key_type tile_id)
     item.set_access_timestamp(seq_++);
 }
 
-SDL2pp::Texture & osmview::TileCache::get_texture(key_type tile_id)
+SDL2pp::Texture & osmview::TileCache::get_texture(key_type tile_id, bool loading_allowed)
 {
     downloader_.perform();
 
     auto & item = get_item(tile_id);
     item.set_access_timestamp(seq_++);
 
-    auto & texture = item.get_texture(renderer_);
+    auto & texture = item.get_texture(renderer_, loading_allowed);
 
     if (texture)
     {
@@ -104,10 +105,12 @@ void osmview::TileCache::gc()
         timestamps.emplace_back(item.second->access_timestamp(), item.first);
     }
 
-    std::sort(timestamps.begin(), timestamps.end());
+    // will be removing the oldert 1/4 of the elements
+    auto mid = timestamps.begin() + timestamps.size()/4;
+    // we don't need the full sort here. nth_element guarantees that all elements before mid are smaller than mid.
+    std::nth_element(timestamps.begin(), mid, timestamps.end());
 
-    for (auto i = timestamps.begin();
-         i != timestamps.begin() + timestamps.size()/4; ++i)
+    for (auto i = timestamps.begin(); i != mid; ++i)
     {
         cache_.erase(i->second);
     }
